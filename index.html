@@ -157,6 +157,62 @@
     margin-bottom: 0.75rem;
   }
 
+  .file-filters {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .filter-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .filter-label {
+    font-size: 0.7rem;
+    font-family: var(--mono);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .type-filter {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .type-chip {
+    font-size: 0.7rem;
+    font-family: var(--mono);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .type-chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .type-chip.selected {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+  }
+
+  .bulk-actions {
+    display: flex;
+    gap: 8px;
+  }
+
   .file-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 1.5rem; }
   .file-item {
     background: var(--surface);
@@ -323,10 +379,13 @@
     <div class="field">
       <label>Model</label>
       <select id="model">
-        <option value="gemma3">gemma3 (Google)</option>
-        <option value="glm4">glm4 (Zhipu)</option>
-        <option value="qwen2.5-coder">qwen2.5-coder (Alibaba)</option>
-        <option value="llama3.3">llama3.3 (Meta)</option>
+        <option value="gemma4:31b-cloud">gemma4</option>
+        <option value="glm-5.1:cloud">glm5.1</option>
+        <option value="qwen3-coder-next:cloud">qwen3-coder-next:cloud</option>
+        <option value="qwen3.5:397b-cloud">qwen3.5</option>
+		<option value="minimax-m2.7:cloud">minimax</option>
+		<option value="gpt-oss:120b-cloud">gpt-oss</option>
+		<option value="kimi-k2.5:cloud">kimi-k2.5</option>
         <option value="custom">Custom model name...</option>
       </select>
     </div>
@@ -360,6 +419,20 @@
   <!-- File list -->
   <div id="fileSection" style="display:none">
     <div class="section-title" id="fileCount">FILES</div>
+    <div class="file-filters" id="fileFilters">
+      <div class="filter-group">
+        <span class="filter-label">Filter by type:</span>
+        <div class="type-filter" id="typeFilter"></div>
+      </div>
+      <div class="bulk-actions">
+        <button class="btn btn-sm btn-secondary" id="selectAllBtn" onclick="selectAllFiles()">
+          Select All
+        </button>
+        <button class="btn btn-sm btn-danger" id="clearSelectionBtn" onclick="clearSelection()">
+          Clear Selection
+        </button>
+      </div>
+    </div>
     <div class="file-list" id="fileList"></div>
   </div>
 
@@ -399,9 +472,10 @@ RESPONSE FORMAT — respond with ONLY valid JSON, no markdown fences, no explana
 let files = [];
 let selectedFiles = new Set();
 let results = {};
+let selectedTypes = new Set(); // Track selected file types for filtering
 
 const LANG_MAP = {
-  py:'Python', js:'JavaScript', ts:'TypeScript', jsx:'React/JSX',
+  py:'Python', js:'JavaScript', ts:'TypeScript', jsx:'React/JSX',dart:'Dart',
   tsx:'React/TSX', go:'Go', java:'Java', rs:'Rust', cpp:'C++',
   c:'C', cs:'C#', php:'PHP', rb:'Ruby', swift:'Swift', kt:'Kotlin'
 };
@@ -500,6 +574,7 @@ async function fetchRepo() {
       return;
     }
 
+    renderTypeFilters();
     renderFileList();
     document.getElementById('fileSection').style.display = 'block';
     document.getElementById('clearBtn').style.display = 'inline-flex';
@@ -512,18 +587,74 @@ async function fetchRepo() {
   btn.disabled = false;
 }
 
+function renderTypeFilters() {
+  const filterContainer = document.getElementById('typeFilter');
+  filterContainer.innerHTML = '';
+
+  // Get unique file types from current files
+  const types = new Set();
+  files.forEach(f => {
+    const lang = getLang(f.path) || 'code';
+    types.add(lang);
+  });
+
+  // Sort types alphabetically
+  const sortedTypes = Array.from(types).sort();
+
+  sortedTypes.forEach(type => {
+    const chip = document.createElement('div');
+    chip.className = 'type-chip' + (selectedTypes.has(type) ? ' selected' : '');
+    chip.textContent = type;
+    chip.onclick = () => toggleTypeFilter(type);
+    filterContainer.appendChild(chip);
+  });
+}
+
+function toggleTypeFilter(type) {
+  selectedTypes.has(type) ? selectedTypes.delete(type) : selectedTypes.add(type);
+  renderTypeFilters();
+  renderFileList();
+}
+
+function selectAllFiles() {
+  // Select all files that match current filter, or all files if no filter
+  const filesToSelect = selectedTypes.size === 0 ? files :
+    files.filter(f => selectedTypes.has(getLang(f.path) || 'code'));
+
+  filesToSelect.forEach((f, i) => {
+    const originalIndex = files.indexOf(f);
+    if (f.status !== 'processing' && f.status !== 'done') {
+      selectedFiles.add(originalIndex);
+    }
+  });
+
+  renderFileList();
+  document.getElementById('refactorAllBtn').disabled = selectedFiles.size === 0;
+}
+
+function clearSelection() {
+  selectedFiles.clear();
+  renderFileList();
+  document.getElementById('refactorAllBtn').disabled = true;
+}
+
 function renderFileList() {
   const list = document.getElementById('fileList');
   list.innerHTML = '';
-  files.forEach((f, i) => {
+
+  // Filter files based on selected types
+  const filteredFiles = selectedTypes.size === 0 ? files :
+    files.filter((f, i) => selectedTypes.has(getLang(f.path) || 'code'));
+
+  filteredFiles.forEach((f, originalIndex) => {
     const div = document.createElement('div');
     div.className = 'file-item' +
-      (selectedFiles.has(i) ? ' selected' : '') +
+      (selectedFiles.has(originalIndex) ? ' selected' : '') +
       (f.status === 'processing' ? ' processing' : '') +
       (f.status === 'done' ? ' done' : '') +
       (f.status === 'error' ? ' error' : '');
-    div.id = `file-${i}`;
-    div.onclick = () => toggleFile(i);
+    div.id = `file-${originalIndex}`;
+    div.onclick = () => toggleFile(originalIndex);
 
     const statusMap = { idle: '○ idle', processing: '◌ working...', done: '✓ done', error: '✗ error' };
 
@@ -534,6 +665,15 @@ function renderFileList() {
     `;
     list.appendChild(div);
   });
+
+  // Update file count
+  const totalFiles = files.length;
+  const filteredCount = filteredFiles.length;
+  const selectedCount = selectedFiles.size;
+  document.getElementById('fileCount').textContent =
+    selectedTypes.size === 0 ?
+      `FILES — ${totalFiles} source files found. click to select` :
+      `FILES — ${filteredCount} of ${totalFiles} files shown (${selectedCount} selected)`;
 }
 
 function toggleFile(i) {
@@ -616,56 +756,12 @@ async function refactorAll() {
   document.getElementById('fetchBtn').disabled = true;
 
   const toProcess = [...selectedFiles];
-  const total = toProcess.length;
-  const CONCURRENCY = 3; // max parallel Ollama requests
-
-  let completed = 0;
-  let active = 0;
-  let queueIndex = 0;
-
-  setStatus(`Starting — 0 / ${total} done (0 active)`, true);
-
-  function updateStatus() {
-    const failed = toProcess.filter(i => files[i].status === 'error').length;
-    const doneCount = toProcess.filter(i => files[i].status === 'done').length;
-    setStatus(
-      `Refactoring — ${completed} / ${total} done · ${active} active · ${failed} failed`,
-      active > 0
-    );
+  for (const idx of toProcess) {
+    await refactorFile(idx);
   }
 
-  await new Promise(resolve => {
-    function runNext() {
-      // If no more to start and nothing active, we're done
-      if (queueIndex >= toProcess.length && active === 0) {
-        resolve();
-        return;
-      }
-
-      // Spawn up to CONCURRENCY parallel tasks
-      while (active < CONCURRENCY && queueIndex < toProcess.length) {
-        const idx = toProcess[queueIndex++];
-        active++;
-        updateStatus();
-
-        refactorFile(idx).finally(() => {
-          active--;
-          completed++;
-          updateStatus();
-          runNext();
-        });
-      }
-    }
-
-    runNext();
-  });
-
-  const failed = toProcess.filter(i => files[i].status === 'error').length;
-  const succeeded = toProcess.filter(i => files[i].status === 'done').length;
-  setStatus(
-    `Done — ${succeeded} refactored · ${failed} failed · ${total} total`,
-    false
-  );
+  clearStatus();
+  setStatus(`Done — ${toProcess.length} file(s) processed`, false);
   document.getElementById('fetchBtn').disabled = false;
 }
 
@@ -770,8 +866,9 @@ async function copyCode(idx) {
 }
 
 function clearAll() {
-  files = []; selectedFiles.clear(); results = {};
+  files = []; selectedFiles.clear(); results = {}; selectedTypes.clear();
   document.getElementById('fileList').innerHTML = '';
+  document.getElementById('typeFilter').innerHTML = '';
   document.getElementById('results').innerHTML = '';
   document.getElementById('fileSection').style.display = 'none';
   document.getElementById('clearBtn').style.display = 'none';
