@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Code Refactor Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0b0e13;
+    --surface: #12161d;
+    --surface2: #1a1f28;
+    --border: #252b36;
+    --accent: #00e5a0;
+    --accent2: #7c6af7;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,160,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,160,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  header { margin-bottom: 2.5rem; }
+  .logo {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 0.5rem;
+  }
+  .logo-icon {
+    width: 36px; height: 36px; background: var(--accent);
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  h1 { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; }
+  h1 span { color: var(--accent); }
+  .tagline { color: var(--muted); font-size: 0.85rem; font-family: var(--mono); }
+
+  /* Config panel */
+  .config-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  @media (max-width: 600px) { .config-grid { grid-template-columns: 1fr; } }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  label { font-size: 0.75rem; font-family: var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+  input, select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    padding: 10px 14px;
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  select option { background: var(--surface2); }
+
+  .full-row { grid-column: 1 / -1; }
+
+  /* Buttons */
+  .btn {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 0.9rem;
+    padding: 11px 22px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+  }
+  .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; filter: none; }
+  .btn-secondary {
+    background: transparent;
+    color: var(--accent2);
+    border: 1px solid var(--accent2);
+  }
+  .btn-secondary:hover { background: rgba(124,106,247,0.1); }
+  .btn-danger {
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    font-size: 0.8rem;
+    padding: 6px 14px;
+  }
+  .btn-sm { padding: 7px 14px; font-size: 0.8rem; }
+
+  .actions { display: flex; gap: 10px; align-items: center; margin-top: 1rem; flex-wrap: wrap; }
+
+  /* Status bar */
+  .status-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin: 1rem 0;
+    min-height: 42px;
+    display: flex; align-items: center; gap: 10px;
+    display: none;
+  }
+  .status-bar.visible { display: flex; }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    background: var(--accent);
+  }
+  .status-dot.spin {
+    animation: pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* File list */
+  .section-title {
+    font-size: 0.7rem;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+  }
+
+  .file-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 1.5rem; }
+  .file-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .file-item:hover { border-color: var(--accent); }
+  .file-item.selected { border-color: var(--accent); background: rgba(0,229,160,0.05); }
+  .file-item.processing { border-color: var(--warn); }
+  .file-item.done { border-color: #22c55e; }
+  .file-item.error { border-color: var(--danger); }
+
+  .file-name { font-family: var(--mono); font-size: 0.82rem; flex: 1; }
+  .file-lang {
+    font-size: 0.7rem; font-family: var(--mono);
+    background: var(--surface2); border: 1px solid var(--border);
+    padding: 2px 8px; border-radius: 4px; color: var(--muted);
+    flex-shrink: 0;
+  }
+  .file-status {
+    font-size: 0.75rem; font-family: var(--mono);
+    color: var(--muted); flex-shrink: 0;
+  }
+  .file-item.processing .file-status { color: var(--warn); }
+  .file-item.done .file-status { color: #22c55e; }
+  .file-item.error .file-status { color: var(--danger); }
+
+  /* Plan / result panels */
+  .result-panels { display: flex; flex-direction: column; gap: 1rem; }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px;
+  }
+  .panel-title { font-size: 0.75rem; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .panel-file { font-size: 0.8rem; font-family: var(--mono); color: var(--accent); }
+
+  .plan-list { padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .plan-item {
+    font-size: 0.82rem; font-family: var(--mono); color: var(--text);
+    padding: 5px 10px;
+    border-left: 2px solid var(--accent2);
+    background: rgba(124,106,247,0.05);
+    border-radius: 0 4px 4px 0;
+  }
+
+  /* Ratings */
+  .ratings { display: flex; gap: 8px; padding: 12px 16px; flex-wrap: wrap; }
+  .rating-chip {
+    display: flex; flex-direction: column; align-items: center;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 14px; min-width: 80px;
+  }
+  .rating-label { font-size: 0.65rem; font-family: var(--mono); color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+  .rating-val { font-size: 1.1rem; font-weight: 700; font-family: var(--mono); }
+  .rating-val.up { color: #22c55e; }
+  .rating-val.down { color: var(--danger); }
+  .rating-val.same { color: var(--muted); }
+
+  /* Code diff */
+  .code-tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .code-tab {
+    padding: 8px 16px;
+    font-size: 0.75rem; font-family: var(--mono);
+    cursor: pointer; color: var(--muted);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s;
+  }
+  .code-tab.active { color: var(--accent); border-color: var(--accent); }
+
+  pre {
+    padding: 16px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    line-height: 1.7;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre;
+  }
+  .code-before { color: #9ca3af; }
+  .code-after { color: #d1fae5; }
+
+  /* Copy button */
+  .copy-btn {
+    font-size: 0.7rem; font-family: var(--mono);
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted); padding: 4px 10px; border-radius: 4px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Empty state */
+  .empty {
+    text-align: center; padding: 3rem 1rem; color: var(--muted);
+    font-family: var(--mono); font-size: 0.85rem;
+  }
+  .empty-icon { font-size: 2rem; margin-bottom: 1rem; opacity: 0.3; }
+
+  /* Overall score bar */
+  .score-bar-wrap { padding: 0 16px 14px; }
+  .score-label { font-size: 0.7rem; font-family: var(--mono); color: var(--muted); margin-bottom: 6px; }
+  .score-bar { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin-bottom: 3px; }
+  .score-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+  .score-fill.before { background: var(--warn); }
+  .score-fill.after  { background: var(--accent); }
+
+  /* Auth warning */
+  .warning-box {
+    background: rgba(245,158,11,0.08);
+    border: 1px solid rgba(245,158,11,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 0.8rem;
+    font-family: var(--mono);
+    color: var(--warn);
+    margin-bottom: 1rem;
+    display: none;
+  }
+  .warning-box.visible { display: block; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">
+      <div class="logo-icon"></div>
+      <h1>Refactor <span>Studio</span></h1>
+    </div>
+    <p class="tagline">// personal ai-powered code refactoring — no feature changes, only clarity</p>
+  </header>
+
+  <!-- Config -->
+  <div class="config-grid">
+    <div class="field full-row">
+      <label>GitHub Repo URL</label>
+      <input id="repoUrl" type="text" placeholder="https://github.com/your-username/your-repo" />
+    </div>
+    <div class="field">
+      <label>GitHub Token (for private repos)</label>
+      <input id="ghToken" type="password" placeholder="ghp_xxxxxxxxxxxx (stored locally only)" />
+    </div>
+    <div class="field">
+      <label>Branch</label>
+      <input id="branch" type="text" placeholder="main" value="main" />
+    </div>
+    <div class="field">
+      <label>Ollama URL</label>
+      <input id="ollamaUrl" type="text" placeholder="http://your-vps:11434" />
+    </div>
+    <div class="field">
+      <label>Model</label>
+      <select id="model">
+        <option value="gemma4:31b-cloud">gemma4</option>
+        <option value="glm-5.1:cloud">glm5.1</option>
+        <option value="qwen3-coder-next:cloud">qwen3-coder-next:cloud</option>
+        <option value="qwen3.5:397b-cloud">qwen3.5</option>
+		<option value="minimax-m2.7:cloud">minimax</option>
+		<option value="gpt-oss:120b-cloud">gpt-oss</option>
+		<option value="kimi-k2.5:cloud">kimi-k2.5</option>
+        <option value="custom">Custom model name...</option>
+      </select>
+    </div>
+    <div class="field" id="customModelField" style="display:none">
+      <label>Custom Model Name</label>
+      <input id="customModel" type="text" placeholder="e.g. gemma4:27b" />
+    </div>
+  </div>
+
+  <div class="warning-box" id="privateWarning">
+    ⚠ Private repo detected — make sure you've entered a GitHub token above with repo read access.
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-primary" id="fetchBtn" onclick="fetchRepo()">
+      <span>↓</span> Fetch files
+    </button>
+    <button class="btn btn-secondary" id="refactorAllBtn" onclick="refactorAll()" disabled>
+      ⚡ Refactor selected
+    </button>
+    <button class="btn btn-sm btn-danger" id="clearBtn" onclick="clearAll()" style="display:none">
+      × Clear
+    </button>
+  </div>
+
+  <div class="status-bar" id="statusBar">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">Ready</span>
+  </div>
+
+  <!-- File list -->
+  <div id="fileSection" style="display:none">
+    <div class="section-title" id="fileCount">FILES</div>
+    <div class="file-list" id="fileList"></div>
+  </div>
+
+  <!-- Results -->
+  <div class="result-panels" id="results"></div>
+</div>
+
+<script>
+const SYSTEM_PROMPT = `You are an expert code refactoring assistant. Your job is to improve code quality without changing functionality.
+
+STRICT RULES — never break these:
+- Do NOT add, remove, or change any feature or behaviour
+- Do NOT rename public APIs, exported functions, or route/endpoint names
+- Do NOT change logic, algorithms, or data structures
+- Only improve: naming clarity, readability, formatting, code structure, and comments
+
+WHAT YOU MUST DO:
+- Use idiomatic patterns for the language
+- Add brief doc-comments on functions that have none
+- Break functions longer than ~40 lines into smaller named helpers
+- Remove redundant comments that just restate the code
+- Consolidate repeated logic into shared helpers
+- Follow standard naming conventions for the language
+
+BEFORE refactoring, generate a plan. Then refactor.
+
+RESPONSE FORMAT — respond with ONLY valid JSON, no markdown fences, no explanation outside the JSON:
+{
+  "plan": ["list of specific planned changes before touching code"],
+  "rating_before": { "naming": 0, "readability": 0, "structure": 0, "complexity": 0, "overall": 0 },
+  "changes_made": ["list of specific changes actually made"],
+  "refactored_code": "the full refactored file content as a string",
+  "rating_after": { "naming": 0, "readability": 0, "structure": 0, "complexity": 0, "overall": 0 },
+  "functional_changes": false
+}`;
+
+let files = [];
+let selectedFiles = new Set();
+let results = {};
+
+const LANG_MAP = {
+  py:'Python', js:'JavaScript', ts:'TypeScript', jsx:'React/JSX',dart:'Dart',
+  tsx:'React/TSX', go:'Go', java:'Java', rs:'Rust', cpp:'C++',
+  c:'C', cs:'C#', php:'PHP', rb:'Ruby', swift:'Swift', kt:'Kotlin'
+};
+const SKIP_DIRS = ['node_modules','vendor','dist','build','.git','__pycache__','.next'];
+const CODE_EXTS = Object.keys(LANG_MAP);
+
+function getLang(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  return LANG_MAP[ext] || null;
+}
+
+function setStatus(msg, spinning=true) {
+  const bar = document.getElementById('statusBar');
+  const dot = document.getElementById('statusDot');
+  bar.classList.add('visible');
+  document.getElementById('statusText').textContent = msg;
+  dot.classList.toggle('spin', spinning);
+}
+function clearStatus() {
+  document.getElementById('statusBar').classList.remove('visible');
+}
+
+function getModel() {
+  const sel = document.getElementById('model').value;
+  if (sel === 'custom') return document.getElementById('customModel').value.trim();
+  return sel;
+}
+
+function getOllamaUrl() {
+  return document.getElementById('ollamaUrl').value.trim().replace(/\/$/, '');
+}
+
+document.getElementById('model').addEventListener('change', function() {
+  document.getElementById('customModelField').style.display =
+    this.value === 'custom' ? 'flex' : 'none';
+});
+
+document.getElementById('repoUrl').addEventListener('input', function() {
+  const v = this.value;
+  const isPrivateHint = v.includes('github.com') && !v.includes('github.com/topics');
+  document.getElementById('privateWarning').classList.toggle('visible', isPrivateHint && !document.getElementById('ghToken').value);
+});
+
+function parseRepoUrl(url) {
+  const match = url.trim().match(/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/|$)/);
+  if (!match) return null;
+  return { owner: match[1], repo: match[2] };
+}
+
+async function ghFetch(url) {
+  const token = document.getElementById('ghToken').value.trim();
+  const headers = { 'Accept': 'application/vnd.github.v3+json' };
+  if (token) headers['Authorization'] = `token ${token}`;
+  const resp = await fetch(url, { headers });
+  if (!resp.ok) throw new Error(`GitHub API error: ${resp.status} ${resp.statusText}`);
+  return resp.json();
+}
+
+async function getTreeFiles(owner, repo, branch) {
+  const data = await ghFetch(
+    `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`
+  );
+  return data.tree
+    .filter(f => f.type === 'blob')
+    .filter(f => {
+      const parts = f.path.split('/');
+      return !parts.some(p => SKIP_DIRS.includes(p));
+    })
+    .filter(f => {
+      const ext = f.path.split('.').pop().toLowerCase();
+      return CODE_EXTS.includes(ext);
+    });
+}
+
+async function fetchRepo() {
+  const url = document.getElementById('repoUrl').value.trim();
+  const branch = document.getElementById('branch').value.trim() || 'main';
+  const parsed = parseRepoUrl(url);
+  if (!parsed) { alert('Invalid GitHub repo URL'); return; }
+
+  const btn = document.getElementById('fetchBtn');
+  btn.disabled = true;
+  setStatus(`Fetching file tree from ${parsed.owner}/${parsed.repo}...`);
+  files = []; selectedFiles.clear(); results = {};
+  document.getElementById('fileList').innerHTML = '';
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('fileSection').style.display = 'none';
+
+  try {
+    const tree = await getTreeFiles(parsed.owner, parsed.repo, branch);
+    files = tree.map(f => ({ ...f, owner: parsed.owner, repo: parsed.repo, branch, status: 'idle' }));
+
+    if (files.length === 0) {
+      setStatus('No source files found in this repo.', false);
+      btn.disabled = false;
+      return;
+    }
+
+    renderFileList();
+    document.getElementById('fileSection').style.display = 'block';
+    document.getElementById('clearBtn').style.display = 'inline-flex';
+    document.getElementById('fileCount').textContent =
+      `FILES — ${files.length} source files found. click to select`;
+    clearStatus();
+  } catch(e) {
+    setStatus('Error: ' + e.message, false);
+  }
+  btn.disabled = false;
+}
+
+function renderFileList() {
+  const list = document.getElementById('fileList');
+  list.innerHTML = '';
+  files.forEach((f, i) => {
+    const div = document.createElement('div');
+    div.className = 'file-item' +
+      (selectedFiles.has(i) ? ' selected' : '') +
+      (f.status === 'processing' ? ' processing' : '') +
+      (f.status === 'done' ? ' done' : '') +
+      (f.status === 'error' ? ' error' : '');
+    div.id = `file-${i}`;
+    div.onclick = () => toggleFile(i);
+
+    const statusMap = { idle: '○ idle', processing: '◌ working...', done: '✓ done', error: '✗ error' };
+
+    div.innerHTML = `
+      <span class="file-name">${f.path}</span>
+      <span class="file-lang">${getLang(f.path) || 'code'}</span>
+      <span class="file-status">${statusMap[f.status] || ''}</span>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function toggleFile(i) {
+  if (files[i].status === 'processing' || files[i].status === 'done') return;
+  selectedFiles.has(i) ? selectedFiles.delete(i) : selectedFiles.add(i);
+  renderFileList();
+  document.getElementById('refactorAllBtn').disabled = selectedFiles.size === 0;
+}
+
+async function fetchFileContent(f) {
+  const token = document.getElementById('ghToken').value.trim();
+  const headers = { 'Accept': 'application/vnd.github.v3.raw' };
+  if (token) headers['Authorization'] = `token ${token}`;
+  const resp = await fetch(
+    `https://api.github.com/repos/${f.owner}/${f.repo}/contents/${f.path}?ref=${f.branch}`,
+    { headers }
+  );
+  if (!resp.ok) throw new Error(`Cannot fetch ${f.path}: ${resp.status}`);
+  return resp.text();
+}
+
+async function callOllama(code, filePath) {
+  const url = getOllamaUrl();
+  if (!url) throw new Error('Ollama URL is not set');
+
+  const resp = await fetch(`${url}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: getModel(),
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: `Refactor this file: ${filePath}\n\n\`\`\`\n${code}\n\`\`\`` }
+      ],
+      stream: false,
+      options: { temperature: 0.1 }
+    })
+  });
+
+  if (!resp.ok) throw new Error(`Ollama error: ${resp.status}`);
+  const data = await resp.json();
+  let content = data.message.content.trim();
+
+  // Strip markdown fences if model added them
+  if (content.startsWith('```')) {
+    content = content.replace(/^```[a-z]*\n?/, '').replace(/```$/, '').trim();
+  }
+  return JSON.parse(content);
+}
+
+async function refactorFile(idx) {
+  const f = files[idx];
+  f.status = 'processing';
+  renderFileList();
+  setStatus(`Refactoring ${f.path}...`);
+
+  try {
+    const original = await fetchFileContent(f);
+    const result = await callOllama(original, f.path);
+
+    if (result.functional_changes) {
+      throw new Error('Model reported functional changes — skipped for safety');
+    }
+
+    results[idx] = { original, result, path: f.path };
+    f.status = 'done';
+    renderFileList();
+    renderResult(idx);
+  } catch(e) {
+    f.status = 'error';
+    f.error = e.message;
+    renderFileList();
+    renderErrorResult(idx, e.message);
+  }
+}
+
+async function refactorAll() {
+  const btn = document.getElementById('refactorAllBtn');
+  btn.disabled = true;
+  document.getElementById('fetchBtn').disabled = true;
+
+  const toProcess = [...selectedFiles];
+  for (const idx of toProcess) {
+    await refactorFile(idx);
+  }
+
+  clearStatus();
+  setStatus(`Done — ${toProcess.length} file(s) processed`, false);
+  document.getElementById('fetchBtn').disabled = false;
+}
+
+function ratingColor(before, after) {
+  if (after > before) return 'up';
+  if (after < before) return 'down';
+  return 'same';
+}
+
+function renderResult(idx) {
+  const { original, result, path } = results[idx];
+  const rb = result.rating_before || {};
+  const ra = result.rating_after || {};
+
+  const div = document.createElement('div');
+  div.className = 'panel';
+  div.id = `result-${idx}`;
+
+  const dims = ['naming','readability','structure','complexity'];
+
+  div.innerHTML = `
+    <div class="panel-header">
+      <span class="panel-title">refactor result</span>
+      <span class="panel-file">${path}</span>
+    </div>
+
+    <!-- Plan -->
+    <div style="padding:12px 16px 0;font-size:0.7rem;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Plan</div>
+    <div class="plan-list">
+      ${(result.plan || result.changes_made || []).map(p =>
+        `<div class="plan-item">${escHtml(p)}</div>`
+      ).join('')}
+    </div>
+
+    <!-- Ratings -->
+    <div style="padding:12px 16px 4px;font-size:0.7rem;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Quality scores</div>
+    <div class="ratings">
+      ${dims.map(d => `
+        <div class="rating-chip">
+          <span class="rating-label">${d}</span>
+          <span class="rating-val ${ratingColor(rb[d], ra[d])}">${rb[d]}→${ra[d]}</span>
+        </div>
+      `).join('')}
+      <div class="rating-chip">
+        <span class="rating-label">overall</span>
+        <span class="rating-val ${ratingColor(rb.overall, ra.overall)}" style="font-size:1.4rem">${rb.overall}→${ra.overall}</span>
+      </div>
+    </div>
+
+    <!-- Score bars -->
+    <div class="score-bar-wrap">
+      <div class="score-label">before</div>
+      <div class="score-bar"><div class="score-fill before" style="width:${(rb.overall||0)*10}%"></div></div>
+      <div class="score-label" style="margin-top:6px">after</div>
+      <div class="score-bar"><div class="score-fill after" style="width:${(ra.overall||0)*10}%"></div></div>
+    </div>
+
+    <!-- Code tabs -->
+    <div class="code-tabs">
+      <div class="code-tab active" id="tab-before-${idx}" onclick="switchTab(${idx},'before')">Before</div>
+      <div class="code-tab" id="tab-after-${idx}" onclick="switchTab(${idx},'after')">After</div>
+    </div>
+    <div id="code-before-${idx}">
+      <pre class="code-before">${escHtml(original)}</pre>
+    </div>
+    <div id="code-after-${idx}" style="display:none">
+      <div style="display:flex;justify-content:flex-end;padding:8px 12px 0;">
+        <button class="copy-btn" onclick="copyCode(${idx})">copy refactored</button>
+      </div>
+      <pre class="code-after">${escHtml(result.refactored_code || '')}</pre>
+    </div>
+  `;
+
+  document.getElementById('results').appendChild(div);
+}
+
+function renderErrorResult(idx, msg) {
+  const f = files[idx];
+  const div = document.createElement('div');
+  div.className = 'panel';
+  div.style.borderColor = 'var(--danger)';
+  div.innerHTML = `
+    <div class="panel-header">
+      <span class="panel-title" style="color:var(--danger)">error</span>
+      <span class="panel-file">${f.path}</span>
+    </div>
+    <div style="padding:14px 16px;font-family:var(--mono);font-size:0.82rem;color:var(--danger)">${escHtml(msg)}</div>
+  `;
+  document.getElementById('results').appendChild(div);
+}
+
+function switchTab(idx, tab) {
+  document.getElementById(`code-before-${idx}`).style.display = tab==='before' ? '' : 'none';
+  document.getElementById(`code-after-${idx}`).style.display  = tab==='after'  ? '' : 'none';
+  document.getElementById(`tab-before-${idx}`).className = 'code-tab' + (tab==='before' ? ' active' : '');
+  document.getElementById(`tab-after-${idx}`).className  = 'code-tab' + (tab==='after'  ? ' active' : '');
+}
+
+async function copyCode(idx) {
+  const code = results[idx]?.result?.refactored_code || '';
+  await navigator.clipboard.writeText(code);
+}
+
+function clearAll() {
+  files = []; selectedFiles.clear(); results = {};
+  document.getElementById('fileList').innerHTML = '';
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('fileSection').style.display = 'none';
+  document.getElementById('clearBtn').style.display = 'none';
+  document.getElementById('refactorAllBtn').disabled = true;
+  clearStatus();
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
