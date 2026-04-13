@@ -372,10 +372,12 @@
       <label>Branch</label>
       <input id="branch" type="text" placeholder="main" value="main" />
     </div>
+	  <!--
     <div class="field">
       <label>Ollama URL</label>
-      <input id="ollamaUrl" type="text" placeholder="http://your-vps:11434" />
+      <input id="ollamaUrl" type="text" placeholder="https://archyuniq.com:11434" />
     </div>
+	  -->
     <div class="field">
       <label>Model</label>
       <select id="model">
@@ -505,7 +507,8 @@ function getModel() {
 }
 
 function getOllamaUrl() {
-  return document.getElementById('ollamaUrl').value.trim().replace(/\/$/, '');
+	return "https://archyuniq.com:11434";
+  //return document.getElementById('ollamaUrl').value.trim().replace(/\/$/, '');
 }
 
 document.getElementById('model').addEventListener('change', function() {
